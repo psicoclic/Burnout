@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hub Clínico Alerta Burnout - Diagnóstico MBI Oficial</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Import Map para habilitar ES Modules nativos en el navegador -->
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "recharts": "https://esm.sh/recharts@2.12.0?deps=react@18.2.0,react-dom@18.2.0",
+        "lucide-react": "https://esm.sh/lucide-react@0.359.0?deps=react@18.2.0",
+        "clsx": "https://esm.sh/clsx@2.1.0",
+        "tailwind-merge": "https://esm.sh/tailwind-merge@2.2.1"
+      }
+    }
+  </script>
+  
+  <!-- Babel para compilar JSX en el navegador -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* Transiciones fluidas y animaciones personalizadas */
+    .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    
+    /* Animación fluida para el círculo somático de respiración */
+    .breathe-circle { transition: all 1s cubic-bezier(0.4, 0, 0.2, 1); }
+    
+    /* Ocultar scrollbar en elementos de navegación */
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 antialiased selection:bg-indigo-100 selection:text-indigo-950 p-3 md:p-6">
+  
+  <div id="root"></div>
+
+  <script type="text/babel" data-type="module">
+    import React, { useState, useEffect, useMemo, useRef } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+    import { 
+      Activity, ShieldAlert, Zap, Wind, Lock, AlertTriangle, 
+      ArrowRight, ArrowLeft, CheckCircle2, RotateCcw, BrainCircuit,
+      Sparkles, Check, ChevronRight, HelpCircle, HeartHandshake, Eye, ClipboardList
+    } from 'lucide-react';
+    import { clsx } from 'clsx';
+    import { twMerge } from 'tailwind-merge';
+
+    function cn(...inputs) {
+      return twMerge(clsx(inputs));
+    }
+
+    // --- CUESTIONARIO MBI COMPLETO (22 ÍTEMS) ---
+    const QUESTIONS = [
+      { id: 1, type: "EE", text: "Me siento emocionalmente agotado por mi trabajo." },
+      { id: 2, type: "EE", text: "Cuando termino la jornada de trabajo me siento vacío." },
+      { id: 3, type: "EE", text: "Me siento fatigado cuando me levanto por la mañana y tengo que enfrentarme a otra jornada de trabajo." },
+      { id: 4, type: "PA", text: "Puedo entender fácilmente cómo se sienten las personas a las que tengo que atender en mi labor diaria." },
+      { id: 5, type: "DP", text: "Siento que estoy tratando a algunas de las personas a las que atiendo como si fueran objetos impersonales." },
+      { id: 6, type: "EE", text: "Trabajar todo el día con gente me produce tensión o me sobrecarga." },
+      { id: 7, type: "PA", text: "Siento que trato con mucha eficacia los problemas de las personas a las que tengo que atender." },
+      { id: 8, type: "EE", text: "Siento que mi trabajo me está desgastando o me tiene 'quemado'." },
+      { id: 9, type: "PA", text: "Siento que estoy influyendo positivamente en la vida de otras personas a través de mi trabajo." },
+      { id: 10, type: "DP", text: "Siento que me he vuelto más insensible con la gente desde que realizo este trabajo." },
+      { id: 11, type: "DP", text: "Me preocupa que este trabajo me esté endureciendo emocionalmente." },
+      { id: 12, type: "PA", text: "Me siento con mucha energía, fuerza y vitalidad en mi día a día profesional." },
+      { id: 13, type: "EE", text: "Me siento frustrado en mi trabajo." },
+      { id: 14, type: "EE", text: "Siento que estoy haciendo un trabajo demasiado exigente o duro." },
+      { id: 15, type: "DP", text: "Siento que realmente no me importa demasiado lo que les ocurra a las personas a las que atiendo." },
+      { id: 16, type: "EE", text: "Trabajar en contacto directo con la gente me produce bastante estrés." },
+      { id: 17, type: "PA", text: "Puedo crear con facilidad un clima agradable y relajado con las personas a las que asisto." },
+      { id: 18, type: "PA", text: "Me siento deprimido, desanimado o falto de incentivos en mi trabajo diario." },
+      { id: 19, type: "PA", text: "He conseguido y realizado muchas cosas valiosas y que merecen la pena en mi trabajo." },
+      { id: 20, type: "EE", text: "Siento que estoy al límite de mis fuerzas y de mis posibilidades emocionales." },
+      { id: 21, type: "PA", text: "Sé tratar de forma muy adecuada los problemas emocionales que se presentan en mi entorno de trabajo." },
+      { id: 22, type: "DP", text: "Siento que las personas a las que atiendo o mis compañeros me culpan de algunos de sus problemas." }
+    ];
+
+    // ESCALA DE FRECUENCIAS OFICIAL MBI (7 OPCIONES)
+    const OPTIONS = [
+      { label: "Nunca", value: 0 },
+      { label: "Pocas veces al año o menos", value: 1 },
+      { label: "Una vez al mes o menos", value: 2 },
+      { label: "Algunas veces al mes", value: 3 },
+      { label: "Una vez a la semana", value: 4 },
+      { label: "Algunas veces a la semana", value: 5 },
+      { label: "Todos los días", value: 6 }
+    ];
+
+    // --- 15 PREGUNTAS DEL RADAR DE COLAPSO ---
+    const CHECKLIST_ITEMS = [
+      "Siento la mandíbula tensa, bruxismo o un dolor agudo en el cuello al despertar o a mitad del día.", // 0 - Físico
+      "Siento un alivio masivo e irracional cuando cancelan una cita, reunión o entrega laboral.",       // 1 - Emocional
+      "He sustituido comidas principales por bocadillos rápidos, exceso de estimulantes o tazas de café para poder seguir rindiendo.", // 2 - Físico
+      "Aún estando cansado de muerte, mi mente procesa listas de pendientes a las 2 AM imposibilitando el descanso.", // 3 - Físico
+      "Procrastino pequeños envíos, correos o llamadas sencillas que antes resolvía en cinco minutos.", // 4 - Cognitivo
+      "Siento un irritabilidad inmediata e impaciencia desmedida ante preguntas ordinarias de clientes, familiares o colegas.", // 5 - Emocional
+      "Tengo la sensación recurrente de que, por más que trabaje, nunca termino todo lo que realmente debería.", // 6 - Cognitivo
+      "He dejado de practicar pasatiempos, hacer ejercicio o ver a amigos bajo la premisa de que 'no me queda energía'.", // 7 - Emocional
+      "Me cuesta muchísimo concentrarme leyendo un texto largo o manteniendo el foco sin dispersarme en redes continuamente.", // 8 - Cognitivo
+      "Siento que los fines de semana o los periodos de descanso ya no son suficientes para restaurar mi energía vital.", // 9 - Emocional
+      "He empezado a experimentar molestias estomacales, acidez o dolores de cabeza sordos y tensionales de forma habitual.", // 10 - Físico
+      "Siento una apatía generalizada, operando permanentemente en modo automático y de manera distante o robótica.", // 11 - Emocional
+      "Evito de forma sistemática mirar la bandeja de entrada o las notificaciones por una micro-sensación de angustia.", // 12 - Cognitivo
+      "Siento que mi memoria inmediata falla más de lo normal (olvido llaves, citas o tareas triviales que acaban de decirme).", // 13 - Cognitivo
+      "Consumo más alcohol, comida ultraprocesada o dopamina rápida al terminar de trabajar con el único fin de 'apagar' el cerebro." // 14 - Emocional
+    ];
+
+    // MAPEO DE CATEGORÍAS DEL CHECKLIST PARA EL GRÁFICO INTERPRETATIVO
+    const getChecklistCategoryStats = (selectedIndices) => {
+      const categories = {
+        Fisiologico: { name: "Tensión Física", count: 0, total: 4, indices: [0, 2, 3, 10] },
+        Cognitivo: { name: "Bloqueo Mental", count: 0, total: 5, indices: [4, 6, 8, 12, 13] },
+        Emocional: { name: "Desgaste Afectivo", count: 0, total: 6, indices: [1, 5, 7, 9, 11, 14] }
+      };
+
+      selectedIndices.forEach(idx => {
+        if (categories.Fisiologico.indices.includes(idx)) categories.Fisiologico.count++;
+        else if (categories.Cognitivo.indices.includes(idx)) categories.Cognitivo.count++;
+        else if (categories.Emocional.indices.includes(idx)) categories.Emocional.count++;
+      });
+
+      return [
+        { name: "Físico/Somático", porcentaje: Math.round((categories.Fisiologico.count / categories.Fisiologico.total) * 100), color: "#f59e0b" },
+        { name: "Cognitivo/Enfoque", porcentaje: Math.round((categories.Cognitivo.count / categories.Cognitivo.total) * 100), color: "#6366f1" },
+        { name: "Emocional/Humor", porcentaje: Math.round((categories.Emocional.count / categories.Emocional.total) * 100), color: "#ec4899" }
+      ];
+    };
+
+    // --- VARIABLES Y DEFINICIONES PARA LA AUDITORÍA DE FUGAS ---
+    const LEAK_DEFINITIONS = {
+      pantallas: {
+        title: "Pantallas & Estímulo Visual",
+        desc: "Exposición excesiva a luz azul y notificaciones en tus momentos de ocio, lo que mantiene al sistema nervioso en estado de hiperalerta sin descanso real.",
+        psychology: "La sobreestimulación lumínica inhibe la secreción de melatonina y mantiene altos los niveles de cortisol basal.",
+        action: "Bloquear pantallas 90 minutos antes de dormir. Reemplaza el feed del móvil por lectura física u ondas alfa de sonido."
+      },
+      interacciones: {
+        title: "Interacciones de Alta Demanda",
+        desc: "Lidiar con clientes difíciles, dinámicas de equipo hostiles o personas que drenan de forma pasiva tus recursos de contención afectiva.",
+        psychology: "La empatía desmedida sin límites emocionales establecidos consume de forma prioritaria el neurotransmisor GABA, acelerando la fatiga social.",
+        action: "Aplica la regla de descompresión tras interacciones complejas: 2 minutos en silencio absoluto antes de abrir el siguiente correo."
+      },
+      sobreesfuerzo: {
+        title: "Sobreesfuerzo & Hiperenfoque",
+        desc: "Sesiones de concentración ininterrumpidas de varias horas. Forzar la maquinaria cognitiva sin respetar los ciclos de pausa activa.",
+        psychology: "Ignorar las alertas de cansancio debilita las funciones ejecutivas del córtex prefrontal, disparando la desmotivación protectora.",
+        action: "Implementa bloques Pomodoro invertidos rígidos (45 minutos de foco por 10 minutos de desconexión motora obligatoria)."
+      },
+      sueno: {
+        title: "Deuda de Sueño Somático",
+        desc: "Reducción en la duración y calidad del sueño profundo. Tu cerebro no logra activar el sistema glinfático para limpiar toxinas metabólicas.",
+        psychology: "Un cerebro privado de fases estables de sueño profundo reacciona de forma hipersensible y ansiosa ante los contratiempos cotidianos.",
+        action: "Asegura una temperatura fresca en el dormitorio e introduce respiración diafragmática tumbado durante los últimos 10 minutos del día."
+      },
+      nutricion: {
+        title: "Nutrición Inflamatoria",
+        desc: "Abuso de ultraprocesados, azúcares rápidos o exceso de estimulantes que provocan caídas agudas de glucosa en sangre y elevan la fatiga mitocondrial.",
+        psychology: "La microbiota intestinal inflamada sabotea directamente la síntesis de serotonina y dopamina, aumentando la neblina mental.",
+        action: "Reemplaza el segundo café del día por un té verde o agua mineral con limón, reduciendo los picos hiperglucémicos."
+      },
+      limites: {
+        title: "Límites Porosos o Ausentes",
+        desc: "Dificultad patológica para decir que 'no' a nuevas demandas. Sobrecargar de manera sistemática tu agenda por complacer a terceros.",
+        psychology: "El miedo al rechazo o la necesidad de control te llevan a asumir cargas externas que actúan como ladrones vitales silenciosos.",
+        action: "Escribe la frase 'Déjame revisar mi agenda y te confirmo más tarde' y utilízala como respuesta por defecto antes de aceptar tareas nuevas."
+      },
+      autoexigencia: {
+        title: "Autoexigencia Implacable",
+        desc: "Un juez interno severo que califica el reposo como 'pérdida de tiempo' y genera culpa paralizante cuando intentas desconectar de tus tareas.",
+        psychology: "Asociar tu valía humana exclusivamente a tu nivel de productividad laboral te encierra en un bucle obsesivo de autodestrucción biológica.",
+        action: "Declara un bloque diario de 'Tiempo No Productivo' de 30 minutos donde esté prohibido avanzar pendientes, estudiar o planificar."
+      }
+    };
+
+    // --- CALCULADORA DE ESCALAS CLÍNICAS MBI ---
+    const calculateMBIResult = (answers) => {
+      const eeIndices = [0, 1, 2, 5, 7, 12, 13, 15, 19];  // Agotamiento Emocional
+      const dpIndices = [4, 9, 10, 14, 21];               // Despersonalización/Cinismo
+      const paIndices = [3, 6, 8, 11, 16, 17, 18, 20];      // Realización Personal
+
+      const eeScore = eeIndices.reduce((sum, idx) => sum + (answers[idx] !== undefined ? answers[idx] : 0), 0);
+      const dpScore = dpIndices.reduce((sum, idx) => sum + (answers[idx] !== undefined ? answers[idx] : 0), 0);
+      const paScore = paIndices.reduce((sum, idx) => sum + (answers[idx] !== undefined ? answers[idx] : 0), 0);
+
+      const eeLevel = eeScore >= 27 ? "Alto" : eeScore >= 19 ? "Medio" : "Bajo";
+      const dpLevel = dpScore >= 10 ? "Alto" : dpScore >= 6 ? "Medio" : "Bajo";
+      const paLevel = paScore <= 33 ? "Bajo" : paScore <= 39 ? "Medio" : "Alto";
+
+      let overallLevel = "Zona Segura";
+      let color = "text-emerald-600";
+      let bg = "bg-emerald-50";
+      let border = "border-emerald-500";
+      let desc = "Tus niveles de desgaste profesional y emocional están bajo control. Tu cuerpo y tu mente sostienen un balance biológico óptimo. Mantén tus límites saludables actuales.";
+
+      let clinicalInterpretation = "";
+      let dailyRecomm = [];
+
+      if (eeLevel === "Alto" || dpLevel === "Alto") {
+        overallLevel = "Colapso Inminente";
+        color = "text-red-600";
+        bg = "bg-red-50";
+        border = "border-red-500";
+        desc = "Alerta Clínica Crítica. Tus recursos biológicos y afectivos se encuentran totalmente desbordados. Estás operando con reservas críticas y presentas el síndrome clínico de Burnout. Es imperativo desacelerar y aplicar el protocolo SOS.";
+        clinicalInterpretation = "Tu organismo ha entrado en fase de resistencia extrema. Ante la falta de energía metabólica, tu mente ha activado un mecanismo defensivo de 'apagado anestésico' (despersonalización) para protegerte de la sobrecarga. El cansancio que experimentas no se repara durmiendo un fin de semana; requiere una intervención somática de desactivación tensional urgente.";
+        dailyRecomm = [
+          "Establecer un límite de desconexión radical de actividades profesionales a las 18:00 horas sin excepciones.",
+          "Realizar paseos lentos de 15 minutos en un entorno natural al aire libre sin dispositivos ni música.",
+          "Aplicar el protocolo de respiración vagal SOS al menos 3 veces al día para relajar la amígdala cerebral.",
+          "Delegar, rechazar o posponer de forma activa al menos el 30% de las tareas secundarias de tu agenda semanal."
+        ];
+      } else if (eeLevel === "Medio" || dpLevel === "Medio" || paLevel === "Bajo") {
+        overallLevel = "Alerta Naranja";
+        color = "text-amber-600";
+        bg = "bg-amber-50";
+        border = "border-amber-500";
+        desc = "Tus reservas energéticas están disminuyendo aceleradamente. Estás en la fase silenciosa de acumulación de deuda vital. Si no ajustas tus fugas y hábitos hoy, el colapso será inminente en las próximas semanas.";
+        clinicalInterpretation = "Estás atrapado en la clásica 'trampa de rendimiento'. El sistema nervioso simpático se mantiene sobreexcitado durante el día de forma constante. La sensación de que 'todo te cuesta el doble' es tu cerebro intentando indicarte que el costo neuroquímico para realizar tus tareas diarias es demasiado elevado. Tus mecanismos de recuperación diarios no están compensando el gasto energético.";
+        dailyRecomm = [
+          "Introducir micro-descansos de 5 minutos de 'desconexión cognitiva' por cada hora de trabajo enfocado.",
+          "Programar una auditoría de tareas semanal para suprimir demandas autoimpuestas que no aportan valor inmediato.",
+          "Ejecutar ejercicios de descompresión mandibular antes de comer y al acostarte.",
+          "Limitar el café a un máximo de una taza por la mañana para no distorsionar las curvas naturales de cortisol."
+        ];
+      } else {
+        clinicalInterpretation = "Posees una arquitectura psicológica protectora saludable. Eres capaz de procesar el estrés diario y mantener una conexión sana y empática con tu entorno y tus labores. Sin embargo, en entornos de alta demanda, la resiliencia no es infinita; es un recurso que debe ser nutrido diariamente mediante el autocuidado preventivo.";
+        dailyRecomm = [
+          "Continuar protegiendo con rigurosidad tus espacios de ocio, juego y descanso nocturno.",
+          "Monitorear mensualmente tus niveles de energía a través de herramientas de rastreo somático preventivo.",
+          "Agradecer y registrar diariamente un logro personal para consolidar tus áreas de autorrealización cognitiva.",
+          "Integrar un hábito de movimiento corporal libre de objetivos competitivos al menos tres veces por semana."
+        ];
+      }
+
+      return {
+        eeScore, eeLevel, eeMax: 54,
+        dpScore, dpLevel, dpMax: 30,
+        paScore, paLevel, paMax: 48,
+        overallLevel, color, bg, border, desc,
+        clinicalInterpretation,
+        dailyRecomm
+      };
+    };
+
+    // --- BOTÓN DE PESTAÑA PERSONALIZADO CON SOPORTE LOCK ---
+    function TabButton({ active, onClick, icon, label, locked }) {
+      return (
+        <button
+          onClick={onClick}
+          disabled={locked}
+          className={cn(
+            "flex items-center gap-2 px-5 py-4 font-semibold text-xs md:text-sm transition-all whitespace-nowrap border-b-2 tracking-tight",
+            locked 
+              ? "opacity-40 cursor-not-allowed text-slate-400 border-transparent bg-slate-50/20 pointer-events-none" 
+              : "hover:bg-slate-100/50 cursor-pointer",
+            active 
+              ? "border-indigo-600 text-indigo-700 bg-white shadow-[0_2px_4px_rgba(99,102,241,0.05)]" 
+              : "border-transparent text-slate-500"
+          )}
+        >
+          {icon}
+          <span>{label}</span>
+        </button>
+      );
+    }
+
+    // --- COMPONENTE DE RESPIRACIÓN SOS (4-7-8) ---
+    function BreathingApp({ severity }) {
+      const [isActive, setIsActive] = useState(false);
+      const [seconds, setSeconds] = useState(0);
+
+      useEffect(() => {
+        let interval = null;
+        if (isActive) {
+          interval = setInterval(() => {
+            setSeconds(s => (s + 1) % 19); // Ciclo de 19 segundos
+          }, 1000);
+        } else {
+          setSeconds(0);
+          clearInterval(interval);
+        }
+        return () => clearInterval(interval);
+      }, [isActive]);
+
+      let phase = "Listo";
+      let instruction = "Pulsa el botón de abajo para comenzar a modular tu pulso cardíaco";
+      let scale = 1;
+      let colorClass = "bg-slate-800 text-white";
+      let ringColor = "border-slate-200";
+
+      if (isActive) {
+        if (seconds < 4) {
+          phase = "Inhala";
+          instruction = "Toma aire de forma suave y profunda por la nariz.";
+          scale = 1 + (seconds / 4) * 0.45; 
+          colorClass = "bg-sky-500 text-white";
+          ringColor = "border-sky-300";
+        } else if (seconds < 11) {
+          phase = "Sostiene";
+          instruction = "Mantén el aire inhalado e inunda tus células.";
+          scale = 1.45;
+          colorClass = "bg-indigo-600 text-white";
+          ringColor = "border-indigo-400";
+        } else {
+          phase = "Exhala";
+          instruction = "Saca el aire de forma prolongada por la boca.";
+          scale = 1.45 - ((seconds - 11) / 8) * 0.45; 
+          colorClass = "bg-emerald-500 text-white";
+          ringColor = "border-emerald-300";
+        }
+      }
+
+      const dynamicPrescription = useMemo(() => {
+        if (severity === "Colapso Inminente") {
+          return {
+            frequency: "Frecuencia recomendada: 3 veces al día",
+            why: "La respiración diafragmática pausada es tu herramienta biológica más potente para inhibir la producción de adrenalina y desinflamar el sistema cardiovascular sobreexcitado.",
+            schedule: "Rutina propuesta: Mañana (al despertar), Mediodía (previo a almorzar) y Noche (justo al acostarte; realiza 4 ciclos completos)."
+          };
+        } else if (severity === "Alerta Naranja") {
+          return {
+            frequency: "Frecuencia recomendada: 2 veces al día",
+            why: "Esta pauta restablece el tono simpaticovagal de forma preventiva, evitando que acumules tensión acumulada durante tus jornadas intelectuales.",
+            schedule: "Rutina propuesta: Mitad de tu jornada laboral (para romper el hiperfoco) y antes de ir a dormir."
+          };
+        } else {
+          return {
+            frequency: "Frecuencia recomendada: 1 vez al día (como higiene nocturna)",
+            why: "Estabiliza el ritmo autonómico antes de iniciar el reposo, garantizando una mayor tasa de recuperación durante la fase de sueño de ondas lentas.",
+            schedule: "Rutina propuesta: Aplícalo por la noche para vaciar tu tensión mental acumulada del día."
+          };
+        }
+      }, [severity]);
+
+      return (
+        <div className="space-y-6">
+          <div className="bg-slate-50 p-6 md:p-8 rounded-3xl border border-slate-200 flex flex-col items-center justify-center space-y-6">
+            
+            <div className="relative w-48 h-48 flex items-center justify-center">
+              <div 
+                className={cn("absolute w-32 h-32 rounded-full border-4 opacity-30 breathe-circle animate-pulse", ringColor)}
+                style={{ transform: `scale(${scale * 1.35})` }}
+              ></div>
+              <div 
+                className={cn("absolute w-32 h-32 rounded-full border opacity-50 breathe-circle", ringColor)}
+                style={{ transform: `scale(${scale * 1.15})` }}
+              ></div>
+
+              <div 
+                className={cn("absolute w-32 h-32 rounded-full flex flex-col items-center justify-center shadow-lg breathe-circle z-10 font-bold", colorClass)}
+                style={{ transform: `scale(${scale})` }}
+              >
+                <span className="text-xl tracking-wide">{phase}</span>
+                {isActive && (
+                  <span className="text-xs mt-1 font-normal opacity-90">
+                    {seconds < 4 ? `${seconds + 1}s / 4s` : seconds < 11 ? `${seconds - 3}s / 7s` : `${seconds - 10}s / 8s`}
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            <div className="h-10 text-center max-w-xs">
+              <p className="text-slate-700 text-xs md:text-sm font-semibold leading-relaxed">{instruction}</p>
+            </div>
+
+            <button 
+              onClick={() => setIsActive(!isActive)}
+              className={cn(
+                "px-8 py-3 rounded-full font-bold transition-all shadow-md hover:scale-105 active:scale-95 text-sm",
+                isActive ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-slate-900 hover:bg-slate-800 text-white"
+              )}
+            >
+              {isActive ? "Pausar SOS" : "Iniciar Protocolo 4-7-8"}
+            </button>
+          </div>
+
+          <div className="bg-slate-900 text-slate-100 p-5 rounded-2xl text-left space-y-3.5 shadow-md border border-slate-800">
+            <div className="flex items-center gap-2 text-sky-400">
+              <HelpCircle size={18} />
+              <h4 className="font-extrabold text-xs md:text-sm uppercase tracking-wider">¿Por qué funciona esta técnica somática?</h4>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed font-semibold">
+              Al prolongar la exhalación (8 segundos) por encima de la inhalación (4 segundos), estimulas directamente el <strong>nervio vago</strong>. Esto le indica físicamente a tu corazón que reduzca los latidos por minuto e induce la liberación de acetilcolina, desactivando la respuesta de 'huida o pelea' de tu amígdala cerebral.
+            </p>
+            <div className="pt-3 border-t border-slate-800 space-y-2">
+              <span className="bg-sky-400/10 text-sky-400 border border-sky-400/20 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-widest inline-block">
+                {dynamicPrescription.frequency}
+              </span>
+              <p className="text-xs text-slate-300 leading-relaxed font-semibold">
+                {dynamicPrescription.why}
+              </p>
+              <p className="text-xs text-sky-300 font-extrabold leading-normal italic">
+                {dynamicPrescription.schedule}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- COMPONENTE PRINCIPAL ---
+    function App() {
+      // Estado Persistente de la App en LocalStorage (Clave v6 para incorporar la pantalla introductoria)
+      const [state, setState] = useState(() => {
+        const saved = localStorage.getItem('alertaBurnoutHubState_v6');
+        if (saved) {
+          try {
+            return JSON.parse(saved);
+          } catch (e) {
+            console.error("Error cargando caché", e);
+          }
+        }
+        return {
+          started: false, // Controla si se ha superado la pantalla introductoria
+          testCompleted: false,
+          answers: {},
+          checklist: [],
+          leaks: { 
+            pantallas: 0, 
+            interacciones: 0, 
+            sobreesfuerzo: 0, 
+            sueno: 0, 
+            nutricion: 0, 
+            limites: 0, 
+            autoexigencia: 0 
+          },
+          mbiResult: null
+        };
+      });
+
+      const [activeTab, setActiveTab] = useState('test');
+      const [currentQuestion, setCurrentQuestion] = useState(0);
+      const [localAnswers, setLocalAnswers] = useState(state.answers || {});
+
+      // Sincronizar estado global con LocalStorage
+      useEffect(() => {
+        localStorage.setItem('alertaBurnoutHubState_v6', JSON.stringify(state));
+      }, [state]);
+
+      useEffect(() => {
+        if (Object.keys(localAnswers).length > 0) {
+          setState(prev => ({
+            ...prev,
+            answers: localAnswers
+          }));
+        }
+      }, [localAnswers]);
+
+      const handleAnswerSelect = (val) => {
+        const updated = { ...localAnswers, [currentQuestion]: val };
+        setLocalAnswers(updated);
+
+        setTimeout(() => {
+          if (currentQuestion < QUESTIONS.length - 1) {
+            setCurrentQuestion(prev => prev + 1);
+          } else {
+            const result = calculateMBIResult(updated);
+            setState(prev => ({
+              ...prev,
+              answers: updated,
+              testCompleted: true,
+              mbiResult: result
+            }));
+          }
+        }, 180);
+      };
+
+      const handlePrev = () => {
+        if (currentQuestion > 0) {
+          setCurrentQuestion(prev => prev - 1);
+        }
+      };
+
+      const handleNext = () => {
+        if (currentQuestion < QUESTIONS.length - 1 && localAnswers[currentQuestion] !== undefined) {
+          setCurrentQuestion(prev => prev + 1);
+        }
+      };
+
+      const startTest = () => {
+        setState(prev => ({
+          ...prev,
+          started: true
+        }));
+      };
+
+      const resetTest = () => {
+        if (confirm("¿Estás seguro de que deseas reiniciar tu evaluación MBI oficial? Se borrarán tus respuestas actuales y los módulos de recuperación se bloquearán hasta completarlo nuevamente.")) {
+          setState(prev => ({
+            ...prev,
+            started: false,
+            testCompleted: false,
+            answers: {},
+            mbiResult: null,
+            checklist: []
+          }));
+          setLocalAnswers({});
+          setCurrentQuestion(0);
+          setActiveTab('test');
+        }
+      };
+
+      const completedCount = Object.keys(localAnswers).length;
+      const progressPercent = Math.round((completedCount / QUESTIONS.length) * 100);
+
+      const activeDiagnostic = state.testCompleted && state.mbiResult 
+        ? state.mbiResult 
+        : null;
+
+      // Calcular interpretación somática basada en el número de checklist marcadas
+      const checklistInterpretation = useMemo(() => {
+        const count = state.checklist.length;
+        if (count >= 10) {
+          return {
+            title: "Fisiología de Fatiga Adrenal Avanzada",
+            desc: "Tu cuerpo está enviando señales de alarma somática generalizadas de nivel crítico. Existe una activación simpática crónica y sostenida. Los sistemas digestivo, muscular e inmune están descompensados debido a altos niveles de cortisol. Necesitas detener la estimulación artificial inmediatamente.",
+            tips: [
+              "Masajea el músculo masetero de la mandíbula durante 2 minutos con agua tibia antes de dormir.",
+              "Haz ayunos prolongados de estimulantes (sin café ni té verde) por 48 horas.",
+              "Involucra posturas de yoga restaurativas invertidas (ej: piernas elevadas contra la pared) durante 10 minutos."
+            ]
+          };
+        } else if (count >= 5) {
+          return {
+            title: "Tensión Somática Moderada",
+            desc: "Presentas señales visibles de sobrecarga nerviosa que tu cerebro prefiere normalizar para seguir produciendo. El bruxismo sutil, la fatiga estomacal o la irritabilidad menor no son casualidades, sino la válvula de escape física de la sobrecarga intelectual acumulada.",
+            tips: [
+              "Evita el 'multitasking' sensorial: silencia el móvil mientras almuerzas o conversas.",
+              "Utiliza un antifaz de semillas frío sobre tus ojos al recostarte para activar el nervio vago.",
+              "Aplica 5 minutos de estiramientos intercostales suaves al finalizar tu jornada de trabajo."
+            ]
+          };
+        } else {
+          return {
+            title: "Equilibrio Somatocognitivo Inicial",
+            desc: "Tus canales corporales sostienen un estado de flujo libre de bloqueos agudos. Las señales de estrés físico son iniciales o esporádicas. Tu cuerpo procesa los estímulos con flexibilidad elástica, pero requiere cuidado constante para no sumar deuda metabólica.",
+            tips: [
+              "Mantén tu rutina de estiramientos matutinos antes de encender el ordenador.",
+              "Asegúrate de tomar 1 litro de agua pura durante tu mañana laboral para sostener la hidratación neurológica.",
+              "Dedica 5 minutos a respirar de forma libre frente a una ventana solada al mediodía."
+            ]
+          };
+        }
+      }, [state.checklist]);
+
+      // Calcular datos para el gráfico interpretativo de categorías de Señales
+      const checklistChartData = useMemo(() => {
+        return getChecklistCategoryStats(state.checklist);
+      }, [state.checklist]);
+
+      // Filtrar todas las fugas que superen el valor de 6 para generar múltiples recomendaciones
+      const criticalLeaks = useMemo(() => {
+        return Object.entries(state.leaks)
+          .filter(([_, val]) => val > 6)
+          .map(([key, val]) => ({
+            key,
+            value: val,
+            title: LEAK_DEFINITIONS[key].title,
+            desc: LEAK_DEFINITIONS[key].desc,
+            psychology: LEAK_DEFINITIONS[key].psychology,
+            action: LEAK_DEFINITIONS[key].action
+          }));
+      }, [state.leaks]);
+
+      return (
+        <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+          
+          {/* HEADER PREMIUM CON LOGOS INTEGRADOS */}
+          <header className="bg-white p-4 md:p-6 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+            
+            {/* Logo Producto (Test de Burnout) */}
+            <div className="flex items-center gap-3">
+              <img 
+                src="Logo test de burnout.jpg" 
+                alt="Logo Test de Riesgo de Burnout" 
+                className="h-14 w-14 md:h-16 md:w-16 rounded-xl object-contain shadow-sm border border-slate-100"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
+              <div className="text-left">
+                <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900 leading-tight">
+                  Test de Riesgo de Burnout
+                </h1>
+                <p className="text-slate-500 text-xs mt-0.5">Diagnóstico Clínico MBI Oficial</p>
+              </div>
+            </div>
+            
+            {/* Contenedor central de estado dinámico */}
+            {state.started && state.testCompleted && activeDiagnostic && (
+              <div className={cn("px-4 py-1.5 rounded-full border text-xs font-bold shadow-sm flex items-center gap-2", activeDiagnostic.bg, activeDiagnostic.color, activeDiagnostic.border)}>
+                <Activity size={12} />
+                Estado: {activeDiagnostic.overallLevel}
+              </div>
+            )}
+
+            {/* Logo Marca PSICOCLIC */}
+            <div className="flex items-center gap-3 sm:border-l sm:border-slate-200 sm:pl-6 shrink-0">
+              <div className="text-right hidden sm:block">
+                <p className="text-slate-400 text-[9px] uppercase font-bold tracking-wider">Desarrollado por</p>
+                <p className="text-slate-800 font-extrabold text-sm leading-none">Psicoclic</p>
+              </div>
+              <img 
+                src="Logo Psicoclic.png" 
+                alt="Logo Psicoclic" 
+                className="h-12 w-auto object-contain"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
+            </div>
+          </header>
+
+          {/* PESTAÑAS DE NAVEGACIÓN Y ACCESOS (Visibles solo si la evaluación ha comenzado) */}
+          {state.started && (
+            <nav className="flex overflow-x-auto border-b border-slate-200 bg-slate-50/50 hide-scrollbar scroll-smooth">
+              <TabButton 
+                active={activeTab === 'test'} 
+                onClick={() => setActiveTab('test')} 
+                icon={<Activity size={18}/>} 
+                label="1. Diagnóstico Clínico" 
+              />
+              <TabButton 
+                active={activeTab === 'checklist'} 
+                onClick={() => state.testCompleted && setActiveTab('checklist')} 
+                icon={state.testCompleted ? <ShieldAlert size={18} className="text-amber-500" /> : <Lock size={16}/>} 
+                label="2. Radar de Señales" 
+                locked={!state.testCompleted}
+              />
+              <TabButton 
+                active={activeTab === 'fugas'} 
+                onClick={() => state.testCompleted && setActiveTab('fugas')} 
+                icon={state.testCompleted ? <Zap size={18} className="text-indigo-500"/> : <Lock size={16}/>} 
+                label="3. Auditoría de Fugas" 
+                locked={!state.testCompleted}
+              />
+              <TabButton 
+                active={activeTab === 'protocolo'} 
+                onClick={() => state.testCompleted && setActiveTab('protocolo')} 
+                icon={state.testCompleted ? <Wind size={18} className="text-sky-500"/> : <Lock size={16}/>} 
+                label="4. SOS Reseteo" 
+                locked={!state.testCompleted}
+              />
+            </nav>
+          )}
+
+          {/* CUERPO CENTRAL DE LA MINI-APP */}
+          <main className="p-5 md:p-8 min-h-[460px] bg-white">
+            
+            {/* PANTALLA INTRODUCTORIA (Si no ha iniciado) */}
+            {!state.started && !state.testCompleted ? (
+              <div className="fade-in space-y-8 max-w-3xl mx-auto">
+                
+                {/* Bloque superior con ilustración de Burnout y Mensaje Principal */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                  
+                  {/* Copy Principal */}
+                  <div className="md:col-span-7 space-y-4">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full uppercase tracking-wider">
+                      <Sparkles size={12} /> Bienvenida al Hub de Diagnóstico MBI
+                    </span>
+                    <h2 className="text-2xl md:text-3xl font-black text-slate-900 leading-tight">
+                      Descubre si tu cuerpo ya está enviando la última advertencia silenciosa
+                    </h2>
+                    <p className="text-slate-600 text-sm md:text-base leading-relaxed font-semibold">
+                      Bienvenido al ecosistema preventivo de descompresión cognitiva. A través de este hub interactivo, podrás mapear científicamente tus niveles de agotamiento, rastrear tus alarmas corporales y neutralizar tus fugas de energía con protocolos basados en neurociencia.
+                    </p>
+                  </div>
+
+                  {/* Imagen de burnout con fallback */}
+                  <div className="md:col-span-5 flex justify-center">
+                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-lg group max-w-sm">
+                      <img 
+                        src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80" 
+                        alt="Imagen de meditación contra el burnout laboral" 
+                        className="object-cover h-48 w-full md:h-56 filter saturate-[0.85] transition-transform duration-500 group-hover:scale-105"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=800&q=80"; // fallback
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent flex items-end p-3">
+                        <span className="text-[10px] text-white font-extrabold tracking-widest uppercase bg-indigo-600/80 px-2 py-0.5 rounded-full backdrop-blur-xs">
+                          Descompresión Somática
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Nota de rigor científico / Descargo de responsabilidad */}
+                <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-5 space-y-2.5">
+                  <div className="flex items-center gap-2 text-amber-800">
+                    <ShieldAlert size={20} className="shrink-0" />
+                    <h4 className="font-extrabold text-xs md:text-sm uppercase tracking-wide">Aclaración y Nota de Rigor Clínico</h4>
+                  </div>
+                  <p className="text-xs md:text-sm text-slate-700 leading-relaxed font-semibold">
+                    Esta herramienta evalúa tus síntomas basándose en el <strong>Inventario de Burnout de Maslach (MBI)</strong>, el estándar metodológico internacional para medir el estrés crónico laboral. 
+                    <span className="text-indigo-950 font-bold"> Es fundamental aclarar que los resultados obtenidos actúan como un indicador orientativo y de autocuidado de alta precisión, pero no constituyen ni sustituyen un diagnóstico clínico formal.</span> Utilízalos como un llamado de alerta preventiva para tomar acción hoy sobre tu estilo de vida o para respaldar tu consulta con un terapeuta profesional.
+                  </p>
+                </div>
+
+                {/* Grid con Datos Estadísticos del Síndrome de Burnout */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">El Impacto del Desgaste Profesional en Cifras</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    
+                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-xs text-center space-y-1">
+                      <p className="text-3xl font-black text-red-500">74%</p>
+                      <p className="text-[10px] font-extrabold uppercase text-slate-400">Prevalencia Activa</p>
+                      <p className="text-xs text-slate-600 font-semibold leading-normal">De los profesionales con puestos de alta exigencia intelectual reportan haber sufrido agotamiento severo en el último año.</p>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-xs text-center space-y-1">
+                      <p className="text-3xl font-black text-indigo-600">8.3h</p>
+                      <p className="text-[10px] font-extrabold uppercase text-slate-400">Pérdida de Rendimiento</p>
+                      <p className="text-xs text-slate-600 font-semibold leading-normal">Semanales perdidas por profesional debido a la neblina mental, la falta de concentración e insomnio reactivo.</p>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-xs text-center space-y-1">
+                      <p className="text-3xl font-black text-emerald-600">114%</p>
+                      <p className="text-[10px] font-extrabold uppercase text-slate-400">Retorno de Prevención</p>
+                      <p className="text-xs text-slate-600 font-semibold leading-normal">De mejora en la energía biológica y foco cognitivo cuando se implementan micro-pausas somáticas guiadas a diario.</p>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Mensaje Inspirador sobre Salud Mental */}
+                <div className="bg-indigo-900 text-indigo-100 rounded-2xl p-6 shadow-md border border-indigo-950/20 text-center space-y-2 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-24 h-24 bg-indigo-500/10 rounded-full -translate-x-12 -translate-y-12"></div>
+                  <h4 className="font-extrabold text-sm uppercase tracking-widest text-indigo-300">Una prioridad innegociable</h4>
+                  <p className="text-sm md:text-base leading-relaxed font-semibold italic max-w-xl mx-auto">
+                    "Tu cuerpo no es un recurso infinito de rendimiento. Cuidar de tu mente no es un lujo que te debas conceder solo cuando termines de trabajar; es la base biológica necesaria para poder seguir construyendo tu vida. Parar a tiempo es estrategia, no debilidad."
+                  </p>
+                </div>
+
+                {/* Botón de Inicio */}
+                <div className="text-center pt-2">
+                  <button 
+                    onClick={startTest}
+                    className="w-full sm:w-auto py-4 px-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-extrabold text-base tracking-wide transition-all flex items-center justify-center gap-2 hover:scale-[1.03] active:scale-95 shadow-md shadow-indigo-600/15"
+                  >
+                    Comenzar Evaluación de Riesgo <ChevronRight size={20} />
+                  </button>
+                  <p className="text-[10px] text-slate-400 mt-2.5">Duración estimada: 3 minutos • 22 ítems de análisis oficial</p>
+                </div>
+
+                {/* Sleek brand footer */}
+                <footer className="pt-6 border-t border-slate-100 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <span>Esta mini-app fue hecha por</span>
+                    <img src="Logo Psicoclic.png" alt="Psicoclic" className="h-6 w-auto object-contain inline-block" onError={(e) => e.target.style.display='none'} />
+                    <span className="font-extrabold text-slate-600">Psicoclic</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">© 2026 Alerta Burnout & Psicoclic • Todos los derechos reservados.</p>
+                </footer>
+
+              </div>
+            ) : (
+              /* RESTO DE LA APP (CUESTIONARIO + SECCIONES) */
+              <div>
+                
+                {/* VISTA 1: DIAGNÓSTICO */}
+                {activeTab === 'test' && (
+                  <div className="fade-in max-w-2xl mx-auto">
+                    {!state.testCompleted ? (
+                      <div className="space-y-6">
+                        {/* Indicadores de progreso */}
+                        <div className="flex flex-col sm:flex-row justify-between text-xs font-semibold text-slate-500 gap-1.5">
+                          <span className="flex items-center gap-1.5 uppercase tracking-wider text-indigo-600">
+                            <Activity size={14} /> Inventario Maslach Burnout (MBI)
+                          </span>
+                          <span>Ítem {currentQuestion + 1} de {QUESTIONS.length} ({progressPercent}% Completado)</span>
+                        </div>
+                        
+                        {/* Barra de progreso */}
+                        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden shadow-inner">
+                          <div 
+                            className="bg-indigo-600 h-full transition-all duration-300 rounded-full" 
+                            style={{ width: `${((currentQuestion + 1) / QUESTIONS.length) * 100}%` }}
+                          ></div>
+                        </div>
+
+                        {/* Caja de la pregunta */}
+                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 text-center shadow-sm">
+                          <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full mb-3 uppercase tracking-wider">
+                            Dimensión: {QUESTIONS[currentQuestion].type === 'EE' ? 'Agotamiento Emocional' : QUESTIONS[currentQuestion].type === 'DP' ? 'Despersonalización / Cinismo' : 'Realización Personal'}
+                          </span>
+                          <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-snug">
+                            {QUESTIONS[currentQuestion].text}
+                          </h2>
+                        </div>
+
+                        {/* Opciones de Frecuencia Oficial */}
+                        <div className="space-y-2">
+                          <p className="text-xs text-slate-400 font-medium text-center uppercase tracking-widest mb-1">Frecuencia con la que experimentas este sentimiento</p>
+                          <div className="grid grid-cols-1 gap-2">
+                            {OPTIONS.map((opt) => {
+                              const isSelected = localAnswers[currentQuestion] === opt.value;
+                              return (
+                                <button
+                                  key={opt.value}
+                                  onClick={() => handleAnswerSelect(opt.value)}
+                                  className={cn(
+                                    "w-full text-left p-3 px-4 rounded-xl border font-medium transition-all flex items-center justify-between text-sm md:text-base",
+                                    isSelected 
+                                      ? "border-indigo-600 bg-indigo-50 text-indigo-900 ring-2 ring-indigo-600/20" 
+                                      : "border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-50 text-slate-700"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span className={cn(
+                                      "w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs border",
+                                      isSelected ? "bg-indigo-600 text-white border-indigo-600" : "bg-slate-100 text-slate-500 border-slate-200"
+                                    )}>
+                                      {opt.value}
+                                    </span>
+                                    <span>{opt.label}</span>
+                                  </div>
+                                  {isSelected && <Check className="text-indigo-600 w-5 h-5" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Navegación manual inferior */}
+                        <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+                          <button
+                            onClick={handlePrev}
+                            disabled={currentQuestion === 0}
+                            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 disabled:opacity-40 transition-colors"
+                          >
+                            <ArrowLeft size={16} /> Anterior
+                          </button>
+                          
+                          <button
+                            onClick={handleNext}
+                            disabled={currentQuestion === QUESTIONS.length - 1 || localAnswers[currentQuestion] === undefined}
+                            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 disabled:opacity-40 transition-colors"
+                          >
+                            Siguiente <ArrowRight size={16} />
+                          </button>
+                        </div>
+
+                      </div>
+                    ) : (
+                      /* RESULTADOS COMPLETADOS Y DETALLE MBI */
+                      <div className="space-y-6 fade-in">
+                        
+                        <div className="text-center space-y-3">
+                          <div className={cn("inline-flex p-4 rounded-full shadow-md", activeDiagnostic.bg, activeDiagnostic.color)}>
+                            <AlertTriangle size={36} />
+                          </div>
+                          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Análisis Clínico de Desgaste</h2>
+                          <p className="text-slate-500 text-sm max-w-md mx-auto">Evaluado bajo la escala de oro Maslach Burnout Inventory (MBI)</p>
+                        </div>
+
+                        {/* Tarjeta de diagnóstico global */}
+                        <div className={cn("p-6 rounded-2xl border-2 shadow-sm relative overflow-hidden", activeDiagnostic.border, activeDiagnostic.bg)}>
+                          <div className="absolute top-0 right-0 w-24 h-24 bg-current opacity-[0.03] rounded-full translate-x-8 -translate-y-8"></div>
+                          <p className="text-xs uppercase font-extrabold tracking-widest text-slate-500 mb-1">Umbral Clínico Determinado</p>
+                          <h3 className={cn("text-4xl font-black mb-3 tracking-tight", activeDiagnostic.color)}>{activeDiagnostic.overallLevel}</h3>
+                          <p className="text-slate-800 font-medium text-base leading-relaxed">
+                            {activeDiagnostic.desc}
+                          </p>
+                        </div>
+
+                        {/* INTERPRETACIÓN PSICOLÓGICA CLÍNICA */}
+                        <div className="bg-slate-900 text-slate-100 rounded-2xl p-6 shadow-lg space-y-4 border border-slate-800">
+                          <div className="flex items-center gap-2.5 text-indigo-400 border-b border-slate-800 pb-3">
+                            <BrainCircuit size={22} />
+                            <h4 className="font-extrabold text-base uppercase tracking-wider">Interpretación Neuro-Psicológica</h4>
+                          </div>
+                          <p className="text-sm text-slate-300 leading-relaxed font-medium">
+                            {activeDiagnostic.clinicalInterpretation}
+                          </p>
+                        </div>
+
+                        {/* PLAN DE ACCIÓN RECOMENDADO */}
+                        <div className="bg-white border-2 border-indigo-100 rounded-2xl p-6 shadow-sm space-y-4">
+                          <div className="flex items-center gap-2.5 text-indigo-700 border-b border-indigo-50 pb-3">
+                            <ClipboardList size={22} />
+                            <h4 className="font-extrabold text-base uppercase tracking-wider">Plan de Acción Somático Diario</h4>
+                          </div>
+                          <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Tareas prioritarias prescritas para tu nivel de energía:</p>
+                          <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {activeDiagnostic.dailyRecomm.map((item, idx) => (
+                              <li key={idx} className="flex gap-3 items-start bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
+                                <span className="text-xs md:text-sm text-slate-700 font-semibold leading-relaxed">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* DESGLOSE ANALÍTICO DE LAS 3 SUBESCALAS */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-5">
+                          <h4 className="font-bold text-slate-800 text-sm uppercase tracking-wider border-b border-slate-200 pb-2 flex items-center gap-2">
+                            <Activity size={16} className="text-indigo-600" /> Desglose Detallado por Dimensiones
+                          </h4>
+
+                          {/* 1. Agotamiento Emocional */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="font-bold text-slate-700 flex items-center gap-1">
+                                Agotamiento Emocional (EE) 
+                                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full ml-2", 
+                                  activeDiagnostic.eeLevel === 'Alto' ? 'bg-red-100 text-red-700' : 
+                                  activeDiagnostic.eeLevel === 'Medio' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                                )}>
+                                  {activeDiagnostic.eeLevel}
+                                </span>
+                              </span>
+                              <span className="font-bold text-slate-900">{activeDiagnostic.eeScore} / 54</span>
+                            </div>
+                            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className={cn("h-full transition-all duration-1000 rounded-full", 
+                                  activeDiagnostic.eeLevel === 'Alto' ? 'bg-red-500' : 
+                                  activeDiagnostic.eeLevel === 'Medio' ? 'bg-amber-500' : 'bg-emerald-500'
+                                )}
+                                style={{ width: `${(activeDiagnostic.eeScore / 54) * 100}%` }}
+                              ></div>
+                            </div>
+                            <p className="text-xs text-slate-500 italic">Mide el agotamiento y cansancio físico/cognitivo provocado por las demandas del rol profesional.</p>
+                          </div>
+
+                          {/* 2. Despersonalización */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="font-bold text-slate-700 flex items-center gap-1">
+                                Despersonalización y Cinismo (DP)
+                                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full ml-2", 
+                                  activeDiagnostic.dpLevel === 'Alto' ? 'bg-red-100 text-red-700' : 
+                                  activeDiagnostic.dpLevel === 'Medio' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                                )}>
+                                  {activeDiagnostic.dpLevel}
+                                </span>
+                              </span>
+                              <span className="font-bold text-slate-900">{activeDiagnostic.dpScore} / 30</span>
+                            </div>
+                            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className={cn("h-full transition-all duration-1000 rounded-full", 
+                                  activeDiagnostic.dpLevel === 'Alto' ? 'bg-red-500' : 
+                                  activeDiagnostic.dpLevel === 'Medio' ? 'bg-amber-500' : 'bg-emerald-500'
+                                )}
+                                style={{ width: `${(activeDiagnostic.dpScore / 30) * 100}%` }}
+                              ></div>
+                            </div>
+                            <p className="text-xs text-slate-500 italic">Evalúa el distanciamiento, cinismo, actitud fría, escéptica e indiferencia hacia la labor y las personas.</p>
+                          </div>
+
+                          {/* 3. Realización Personal */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="font-bold text-slate-700 flex items-center gap-1">
+                                Realización Personal (PA)
+                                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full ml-2", 
+                                  activeDiagnostic.paLevel === 'Bajo' ? 'bg-red-100 text-red-700' : 
+                                  activeDiagnostic.paLevel === 'Medio' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                                )}>
+                                  {activeDiagnostic.paLevel === 'Bajo' ? 'Bajo (Riesgo Alto)' : activeDiagnostic.paLevel === 'Medio' ? 'Medio' : 'Alto (Saludable)'}
+                                </span>
+                              </span>
+                              <span className="font-bold text-slate-900">{activeDiagnostic.paScore} / 48</span>
+                            </div>
+                            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className={cn("h-full transition-all duration-1000 rounded-full", 
+                                  activeDiagnostic.paLevel === 'Bajo' ? 'bg-red-500' : 
+                                  activeDiagnostic.paLevel === 'Medio' ? 'bg-amber-500' : 'bg-emerald-500'
+                                )}
+                                style={{ width: `${(activeDiagnostic.paScore / 48) * 100}%` }}
+                              ></div>
+                            </div>
+                            <p className="text-xs text-slate-500 italic">Mide los sentimientos de autoeficacia, competencia e involucramiento positivo en el trabajo (Puntaje bajo indica Burnout).</p>
+                          </div>
+
+                        </div>
+
+                        {/* Caja de desbloqueo de módulos de recuperación */}
+                        <div className="bg-slate-950 text-white p-6 rounded-2xl shadow-md border border-indigo-500/30 flex flex-col md:flex-row items-center gap-5">
+                          <div className="p-3 bg-indigo-600/30 text-indigo-400 rounded-2xl self-center md:self-start">
+                            <Sparkles size={32} className="animate-pulse" />
+                          </div>
+                          <div className="flex-1 text-center md:text-left space-y-1.5">
+                            <h4 className="font-extrabold text-lg text-indigo-300">¡Plan de Recuperación Activado!</h4>
+                            <p className="text-slate-300 text-xs md:text-sm leading-relaxed">
+                              La severidad clínica de tu diagnóstico ha desbloqueado las herramientas de soporte somático y auditoría de fugas energéticas.
+                            </p>
+                          </div>
+                          <button 
+                            onClick={() => setActiveTab('checklist')}
+                            className="w-full md:w-auto py-3 px-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all flex justify-center items-center gap-2 hover:scale-[1.02] active:scale-95 text-sm"
+                          >
+                            Iniciar Radar de Señales <ChevronRight size={16} />
+                          </button>
+                        </div>
+
+                        {/* Botón de reinicio */}
+                        <div className="text-center pt-2">
+                          <button 
+                            onClick={resetTest}
+                            className="text-slate-400 text-xs hover:text-slate-600 inline-flex items-center gap-1.5 transition-colors p-2"
+                          >
+                            <RotateCcw size={12} /> Deseo rehacer la evaluación MBI
+                          </button>
+                        </div>
+
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* VISTA 2: RADAR DE SEÑALES */}
+                {activeTab === 'checklist' && state.testCompleted && (
+                  <div className="fade-in max-w-2xl mx-auto space-y-6">
+                    
+                    {/* Cabecera de la Sección */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                      <div>
+                        <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                          <ShieldAlert className="text-amber-500 w-7 h-7" />
+                          Radar de Colapso Silencioso
+                        </h2>
+                        <p className="text-slate-500 text-sm mt-1">Interviene las alertas precoces antes de que la fatiga muscular y el sistema nervioso colapsen.</p>
+                      </div>
+                      <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full shrink-0">
+                        Marcadas: {state.checklist.length} de 15
+                      </span>
+                    </div>
+
+                    {/* LISTA DE EVALUACIÓN INTERACTIVA (15 ÍTEMS) */}
+                    <div className="space-y-2.5 max-h-[440px] overflow-y-auto pr-2 border-b border-slate-100 pb-6">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-2">Señales Silenciosas del Cuerpo</span>
+                      {CHECKLIST_ITEMS.map((item, idx) => {
+                        const isChecked = state.checklist.includes(idx);
+                        
+                        return (
+                          <div 
+                            key={idx}
+                            onClick={() => {
+                              const newChecklist = isChecked 
+                                ? state.checklist.filter(i => i !== idx)
+                                : [...state.checklist, idx];
+                              setState(prev => ({ ...prev, checklist: newChecklist }));
+                        }}
+                            className={cn(
+                              "p-3.5 rounded-xl border cursor-pointer transition-all duration-200 flex items-start gap-3",
+                              isChecked ? "border-amber-500 bg-amber-50/40 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"
+                            )}
+                          >
+                            <div className={cn(
+                              "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors shrink-0 mt-0.5",
+                              isChecked ? "bg-amber-500 border-amber-500 text-white" : "border-slate-300 bg-white"
+                            )}>
+                              {isChecked && <Check size={12} strokeWidth={4} />}
+                            </div>
+                            <div className="flex-1">
+                              <span className={cn("text-xs md:text-sm leading-relaxed font-semibold block", isChecked ? "text-slate-900" : "text-slate-600")}>
+                                {idx + 1}. {item}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* CONDICIONAL DE GRÁFICO, INTERPRETACIÓN Y ADVERTENCIAS */}
+                    {state.checklist.length === 0 ? (
+                      <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center space-y-3">
+                        <div className="inline-flex p-3 bg-slate-100 text-slate-400 rounded-full">
+                          <ShieldAlert size={28} />
+                        </div>
+                        <h3 className="text-base font-bold text-slate-800">Carga Somática en Espera</h3>
+                        <p className="text-xs md:text-sm text-slate-500 max-w-md mx-auto">
+                          Selecciona arriba las alarmas físicas, mentales o conductuales que has sentido en las últimas semanas para dibujar tu <strong>gráfico somático interactivo</strong> e interpretación clínica en tiempo real aquí abajo.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6 fade-in pt-2">
+                        
+                        {/* GRÁFICO INTERPRETATIVO */}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Nivel de Sobrecarga por Dimensión Somática</h4>
+                          <div className="h-[200px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={checklistChartData} layout="vertical">
+                                <XAxis type="number" domain={[0, 100]} hide />
+                                <YAxis dataKey="name" type="category" tick={{fill: '#475569', fontSize: 11, fontWeight: 'bold'}} axisLine={false} tickLine={false} width={130} />
+                                <Tooltip 
+                                  formatter={(value) => [`${value}% de Sobrecarga`, 'Índice']}
+                                  contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '12px'}}
+                                />
+                                <Bar dataKey="porcentaje" radius={[0, 4, 4, 0]} barSize={20}>
+                                  {checklistChartData.map((entry, idx) => (
+                                    <Cell key={`cell-${idx}`} fill={entry.color} />
+                                  ))}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <p className="text-[11px] text-slate-400 text-center italic">Este gráfico se actualiza en tiempo real de acuerdo a la severidad de tus selecciones.</p>
+                        </div>
+
+                        {/* LECTURA DE INTERPRETACIÓN ADAPTATIVA */}
+                        <div className="bg-amber-50/50 border border-amber-200 rounded-2xl p-5 space-y-3.5">
+                          <div className="flex items-center gap-2 text-amber-800">
+                            <HeartHandshake size={20} />
+                            <h4 className="font-extrabold text-sm uppercase tracking-wide">{checklistInterpretation.title}</h4>
+                          </div>
+                          <p className="text-xs md:text-sm text-slate-700 leading-relaxed font-semibold">
+                            {checklistInterpretation.desc}
+                          </p>
+                          <div className="pt-2 border-t border-amber-200">
+                            <p className="text-xs text-amber-900 font-extrabold uppercase tracking-wider mb-2">Micro-hábitos Físicos de Descompresión:</p>
+                            <ul className="space-y-1.5">
+                              {checklistInterpretation.tips.map((tip, index) => (
+                                <li key={index} className="flex gap-2 text-xs md:text-sm text-slate-700 font-semibold items-start">
+                                  <Check className="text-amber-600 shrink-0 mt-0.5" size={14} />
+                                  <span>{tip}</span>
+                                </li>
+                              ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                  </div>
+                )}
+
+                {state.checklist.length >= 5 && (
+                  <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-800 text-xs md:text-sm font-semibold animate-pulse flex items-center gap-2.5">
+                    <AlertTriangle size={18} className="shrink-0" />
+                    Presentas una alta acumulación de alarmas físicas ({state.checklist.length}/15). Tus canales somáticos emiten advertencias críticas. Es urgente pasar a auditar tus fugas vitales.
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center pt-2">
+                  <span className="text-xs text-slate-400 italic">Marca las señales con las que te sientas identificado</span>
+                  <button 
+                    onClick={() => setActiveTab('fugas')}
+                    className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-sm"
+                  >
+                    Auditar Fugas <ArrowRight size={16} />
+                  </button>
+                </div>
+
+                {/* Sleek brand footer */}
+                <footer className="pt-6 border-t border-slate-100 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <span>Esta mini-app fue hecha por</span>
+                    <img src="Logo Psicoclic.png" alt="Psicoclic" className="h-6 w-auto object-contain inline-block" onError={(e) => e.target.style.display='none'} />
+                    <span className="font-extrabold text-slate-600">Psicoclic</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">© 2026 Alerta Burnout & Psicoclic • Todos los derechos reservados.</p>
+                </footer>
+
+              </div>
+            )}
+
+            {/* VISTA 3: FUGAS */}
+            {activeTab === 'fugas' && state.testCompleted && (
+              <div className="fade-in space-y-6">
+                <div className="text-center max-w-lg mx-auto">
+                  <h2 className="text-2xl font-bold text-slate-900 flex items-center justify-center gap-2">
+                    <Zap className="text-indigo-500 w-7 h-7" />
+                    Auditoría de Fugas de Energía
+                  </h2>
+                  <p className="text-slate-500 text-sm mt-1">Calibra tus canales de consumo vital (de 0 a 10) para diagnosticar de forma precisa en qué estás consumiendo tus reservas biológicas.</p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                  <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200 max-h-[500px] overflow-y-auto">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">Canales de Drenaje Vital</h4>
+                    
+                    {Object.entries(LEAK_DEFINITIONS).map(([key, item]) => {
+                      const currentValue = state.leaks[key] !== undefined ? state.leaks[key] : 0;
+                      return (
+                        <div key={key} className="bg-white p-3.5 rounded-xl border border-slate-200/60 shadow-sm space-y-2">
+                          <div className="flex justify-between items-center text-xs font-bold text-slate-800">
+                            <span className="flex items-center gap-1 text-slate-900">{item.title}</span>
+                            <span className={cn(
+                              "font-extrabold px-2 py-0.5 rounded-full text-xs",
+                              currentValue >= 8 ? "bg-red-100 text-red-700" :
+                              currentValue >= 5 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                            )}>{currentValue}/10</span>
+                          </div>
+                          
+                          <input 
+                            type="range" min="0" max="10" value={currentValue}
+                            onChange={(e) => setState(prev => ({
+                              ...prev, leaks: { ...prev.leaks, [key]: parseInt(e.target.value) }
+                            }))}
+                            className="w-full accent-indigo-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                          />
+                          <p className="text-[11px] text-slate-500 leading-normal font-medium">{item.desc}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="space-y-4 sticky top-4">
+                    
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block text-center">Filtro de Drenaje Vital (Mapa Gráfico)</span>
+                      <div className="h-[200px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={Object.entries(state.leaks).map(([key, val]) => {
+                            const nameMap = {
+                              pantallas: 'Pantallas',
+                              interacciones: 'Relaciones',
+                              sobreesfuerzo: 'Hiperfoco',
+                              sueno: 'Deuda Sueño',
+                              nutricion: 'Nutrición',
+                              limites: 'Límites',
+                              autoexigencia: 'Exigencia'
+                            };
+                            return {
+                              name: nameMap[key] || key,
+                              Puntuacion: val 
+                            };
+                          })}>
+                            <XAxis dataKey="name" tick={{fill: '#64748b', fontSize: 9, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
+                            <YAxis hide domain={[0, 10]} />
+                            <Tooltip 
+                              cursor={{fill: '#f8fafc'}} 
+                              contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.05)'}}
+                            />
+                            <Bar dataKey="Puntuacion" radius={[4, 4, 0, 0]}>
+                              {Object.entries(state.leaks).map((entry, idx) => (
+                                <Cell key={`cell-${idx}`} fill={entry[1] >= 8 ? '#ef4444' : entry[1] >= 5 ? '#f59e0b' : '#10b981'} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3.5 max-h-[340px] overflow-y-auto pr-1">
+                      {criticalLeaks.length === 0 ? (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 space-y-2 shadow-sm">
+                          <div className="flex items-center gap-2 text-emerald-900">
+                            <CheckCircle2 className="text-emerald-600" size={18} />
+                            <h4 className="font-extrabold text-xs md:text-sm uppercase tracking-wide">Fugas bajo control</h4>
+                          </div>
+                          <p className="text-xs text-slate-700 leading-relaxed font-semibold">
+                            No se detectan fugas de energía críticas con puntuación superior a 6/10. Mueve las barras a la derecha si sientes que algún factor te desgasta para recibir pautas y análisis.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Fugas Críticas Activas ({criticalLeaks.length})</h4>
+                          {criticalLeaks.map((leak) => (
+                            <div key={leak.key} className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 space-y-2.5 shadow-sm fade-in">
+                              <div className="flex justify-between items-center text-indigo-900">
+                                <span className="font-extrabold text-xs md:text-sm uppercase tracking-wide flex items-center gap-2">
+                                  <Zap className="text-indigo-600 shrink-0" size={16} /> {leak.title}
+                                </span>
+                                <span className="bg-indigo-200 text-indigo-900 text-xs font-extrabold px-2.5 py-0.5 rounded-full">{leak.value}/10</span>
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[9px] font-extrabold text-indigo-700 uppercase tracking-widest block">Interpretación Psicológica:</span>
+                                <p className="text-xs text-slate-700 leading-relaxed font-semibold">
+                                  {leak.psychology}
+                                </p>
+                              </div>
+                              <div className="pt-2 border-t border-indigo-200/60 space-y-1">
+                                <span className="text-[9px] font-extrabold text-indigo-700 uppercase tracking-widest block">Contraataque Diario Recomendado:</span>
+                                <p className="text-xs text-indigo-950 font-extrabold leading-relaxed bg-white/75 p-2.5 rounded-xl border border-indigo-100">
+                                  {leak.action}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button 
+                    onClick={() => setActiveTab('protocolo')}
+                    className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-sm"
+                  >
+                    Activar SOS Cortical <Wind size={16} />
+                  </button>
+                </div>
+
+                {/* Sleek brand footer */}
+                <footer className="pt-6 border-t border-slate-100 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <span>Esta mini-app fue hecha por</span>
+                    <img src="Logo Psicoclic.png" alt="Psicoclic" className="h-6 w-auto object-contain inline-block" onError={(e) => e.target.style.display='none'} />
+                    <span className="font-extrabold text-slate-600">Psicoclic</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">© 2026 Alerta Burnout & Psicoclic • Todos los derechos reservados.</p>
+                </footer>
+
+              </div>
+            )}
+
+            {/* VISTA 4: PROTOCOLO SOS */}
+            {activeTab === 'protocolo' && state.testCompleted && (
+              <div className="fade-in max-w-lg mx-auto space-y-6 text-center">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900 flex items-center justify-center gap-2">
+                    <Wind className="text-sky-500 w-7 h-7" />
+                    Reseteo Cortical Express
+                  </h2>
+                  <p className="text-slate-500 text-sm mt-1">Amortiguador clínico respiratorio 4-7-8 para calmar la amígdala cerebral y apagar de inmediato la tormenta de cortisol corporal.</p>
+                </div>
+
+                <BreathingApp severity={state.mbiResult?.overallLevel || "Zona Segura"} />
+
+                {/* Sleek brand footer */}
+                <footer className="pt-6 border-t border-slate-100 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <span>Esta mini-app fue hecha por</span>
+                    <img src="Logo Psicoclic.png" alt="Psicoclic" className="h-6 w-auto object-contain inline-block" onError={(e) => e.target.style.display='none'} />
+                    <span className="font-extrabold text-slate-600">Psicoclic</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">© 2026 Alerta Burnout & Psicoclic • Todos los derechos reservados.</p>
+                </footer>
+              </div>
+            )}
+
+          </div>
+        )}
+
+          </main>
+        </div>
+      );
+    }
+
+    // Renderizado seguro en el DOM del navegador
+    const root = createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
